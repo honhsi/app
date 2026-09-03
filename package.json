@@ -1,0 +1,15 @@
+{
+  "name": "app-builder-template",
+  "version": "2.2.1",
+  "main": "index.js",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0"
+  }
+}
