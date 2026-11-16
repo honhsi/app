@@ -1,0 +1,61 @@
+plugins {
+    id 'com.android.application'
+}
+
+def appVersionCode = (project.findProperty('APP_VERSION_CODE') ?: '1').toInteger()
+def appVersionName = (project.findProperty('APP_VERSION_NAME') ?: '1.0.0').toString()
+def initialUrl = (project.findProperty('INITIAL_URL') ?: 'https://app.19575.top:39090').toString()
+def webBaseUrl = (project.findProperty('WEB_BASE_URL') ?: initialUrl).toString()
+def apiBaseUrl = (project.findProperty('API_BASE_URL') ?: webBaseUrl).toString()
+def appName = (project.findProperty('APP_NAME') ?: 'HS娱乐城').toString()
+def officialUrl = (project.findProperty('OFFICIAL_URL') ?: '').toString()
+def themeColor = (project.findProperty('THEME_COLOR') ?: '#7c6cff').toString()
+def paymentHosts = (project.findProperty('PAYMENT_HOSTS') ?: '').toString()
+
+android {
+    namespace 'com.hs.club'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.hs.club"
+        minSdk 24
+        targetSdk 35
+        versionCode appVersionCode
+        versionName appVersionName
+        buildConfigField "String", "INITIAL_URL", "\"${initialUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
+        buildConfigField "String", "WEB_BASE_URL", "\"${webBaseUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
+        buildConfigField "String", "API_BASE_URL", "\"${apiBaseUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
+        buildConfigField "String", "APP_NAME", "\"${appName.replace('\\', '\\\\').replace('"', '\\"')}\""
+        buildConfigField "String", "OFFICIAL_URL", "\"${officialUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
+        buildConfigField "String", "THEME_COLOR", "\"${themeColor}\""
+        buildConfigField "String", "PAYMENT_HOSTS", "\"${paymentHosts.replace('\\', '\\\\').replace('"', '\\"')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv("KEYSTORE_FILE")) {
+                signingConfig signingConfigs.create("release") {
+                    storeFile file(System.getenv("KEYSTORE_FILE"))
+                    storePassword System.getenv("KEYSTORE_PASSWORD")
+                    keyAlias System.getenv("KEY_ALIAS") ?: "hs"
+                    keyPassword System.getenv("KEY_PASSWORD")
+                }
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.caverock:androidsvg-aar:1.4'
+}
