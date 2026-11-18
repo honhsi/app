@@ -47,7 +47,8 @@ public class SplashActivity extends Activity {
         setContentView(root);
 
         handler.postDelayed(() -> {
-            Intent i = new Intent(this, NativeHomeActivity.class);
+            Intent i = new Intent(this, MainActivity.class);
+            i.putExtra(MainActivity.EXTRA_SKIP_SPLASH, true);
             startActivity(i);
             finish();
         }, 2200);
