@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         if (!isGame) createSplash();
         webView.loadUrl(startUrl);
         if (isGame) setGameActive(true);
-        if (!isGame) checkUpdate();
+        if (!isGame) UpdateActivity.check(this);
     }
 
     private void createSplash() {

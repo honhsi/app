@@ -67,14 +67,15 @@ public class NativeHomeActivity extends Activity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setStatusBarColor(Color.parseColor("#f8f5ff"));
-        getWindow().setNavigationBarColor(Color.WHITE);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        HsTheme.init(this);
+        HsTheme.apply(this);
+        getWindow().setStatusBarColor(HsTheme.bg);
+        getWindow().setNavigationBarColor(HsTheme.panel);
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#f8f5ff"));
+        root.setBackgroundColor(HsTheme.bg);
         setContentView(root);
         showLoading("正在连接...");
-        checkUpdate();
+        UpdateActivity.check(this);
         pool.execute(() -> {
             JSONObject s = Api.session();
             final boolean login = s != null && s.optBoolean("login", false);
@@ -329,8 +330,8 @@ public class NativeHomeActivity extends Activity {
         addBottomNav(page);
         root.addView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        dep.setOnClickListener(v -> openWeb("/recharge"));
-        wd.setOnClickListener(v -> openWeb("/withdraw"));
+        dep.setOnClickListener(v -> startActivity(new Intent(this, RechargeActivity.class)));
+        wd.setOnClickListener(v -> startActivity(new Intent(this, WithdrawActivity.class)));
         wallet.setOnClickListener(v -> startActivity(new Intent(this, WalletActivity.class)));
         loadCatalog();
         refreshSession();
@@ -401,9 +402,9 @@ public class NativeHomeActivity extends Activity {
             cell.addView(label);
             cell.setOnClickListener(v -> {
                 if (idx == 0) return;
-                if (idx == 1) openWeb("/promotions");
-                else if (idx == 2) openWeb("/recharge");
-                else if (idx == 3) openWeb("/withdraw");
+                if (idx == 1) startActivity(new Intent(this, ActivitiesActivity.class));
+                else if (idx == 2) startActivity(new Intent(this, RechargeActivity.class));
+                else if (idx == 3) startActivity(new Intent(this, WithdrawActivity.class));
                 else startActivity(new Intent(this, ProfileActivity.class));
             });
             nav.addView(cell, new LinearLayout.LayoutParams(0, dp(52), 1));
@@ -560,6 +561,14 @@ public class NativeHomeActivity extends Activity {
     }
 
     private void openWeb(String path) {
+        if ("/vip".equals(path)) {
+            startActivity(new Intent(this, VipActivity.class));
+            return;
+        }
+        if ("/promotions".equals(path)) {
+            startActivity(new Intent(this, ActivitiesActivity.class));
+            return;
+        }
         Intent i = new Intent(this, MainActivity.class);
         i.putExtra(MainActivity.EXTRA_URL, Api.base() + path);
         startActivity(i);
