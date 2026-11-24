@@ -21,7 +21,12 @@ public class ApkProvider extends ContentProvider {
     @Override public Cursor query(Uri uri, String[] projection, String selection,
                                   String[] selectionArgs, String sortOrder) {
         String name = uri.getLastPathSegment();
-        File f = file(name);
+        File f;
+        try {
+            f = file(name);
+        } catch (FileNotFoundException e) {
+            f = null;
+        }
         String[] cols = projection == null
                 ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}
                 : projection;
@@ -29,7 +34,7 @@ public class ApkProvider extends ContentProvider {
         Object[] row = new Object[cols.length];
         for (int i = 0; i < cols.length; i++) {
             if (OpenableColumns.DISPLAY_NAME.equals(cols[i])) row[i] = name;
-            else if (OpenableColumns.SIZE.equals(cols[i])) row[i] = f.length();
+            else if (OpenableColumns.SIZE.equals(cols[i])) row[i] = f == null ? 0 : f.length();
         }
         c.addRow(row);
         return c;
@@ -49,9 +54,22 @@ public class ApkProvider extends ContentProvider {
         return ParcelFileDescriptor.open(file(uri.getLastPathSegment()), ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
-    private File file(String name) {
+    private File file(String name) throws FileNotFoundException {
         File dir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         if (dir == null) dir = getContext().getFilesDir();
-        return new File(dir, name);
+        // 只接受单层、安全字符的文件名：防止 ..%2F 越出下载目录读到私有文件
+        String safe = name == null ? "" : name.replaceAll("[^A-Za-z0-9._-]", "_");
+        if (safe.isEmpty() || safe.contains("..")) throw new FileNotFoundException("bad name");
+        File f = new File(dir, safe);
+        try {
+            String base = dir.getCanonicalPath();
+            String path = f.getCanonicalPath();
+            if (!path.equals(base) && !path.startsWith(base + File.separator)) {
+                throw new FileNotFoundException("bad path");
+            }
+        } catch (java.io.IOException e) {
+            throw new FileNotFoundException("bad path");
+        }
+        return f;
     }
 }

@@ -67,7 +67,22 @@ public class MainActivity extends Activity {
         String launchUrl = getIntent().getStringExtra(EXTRA_URL);
         final boolean isGame = getIntent().getBooleanExtra(EXTRA_GAME, false);
         directGame = isGame;
-        if (launchUrl == null || launchUrl.trim().isEmpty()) launchUrl = BuildConfig.INITIAL_URL;
+        if (launchUrl == null || launchUrl.trim().isEmpty()) {
+            launchUrl = BuildConfig.INITIAL_URL;
+        } else {
+            // 外部可以直接 startActivity 拉起本页并塞 extra_url：
+            // 只允许 http(s) + 本站域名，其余一律回落官方首页，防止任意页面拿到 HSApp 桥。
+            try {
+                Uri lu = Uri.parse(launchUrl);
+                String sc = lu.getScheme() == null ? "" : lu.getScheme().toLowerCase();
+                // 游戏页是厂商域名，不能用本站白名单卡；普通页面必须是本站 http(s)
+                if (!("http".equals(sc) || "https".equals(sc)) || (!isGame && !isTrustedHost(lu.getHost()))) {
+                    launchUrl = BuildConfig.INITIAL_URL;
+                }
+            } catch (Throwable e) {
+                launchUrl = BuildConfig.INITIAL_URL;
+            }
+        }
         startUrl = launchUrl;
 
         webView = new WebView(this);
@@ -107,7 +122,6 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true);
 
-        webView.addJavascriptInterface(new Bridge(), "HSApp");
         webView.setWebViewClient(new Client());
         webView.setWebChromeClient(new Chrome());
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
@@ -119,6 +133,8 @@ public class MainActivity extends Activity {
         createNativeBack();
         splashMinMs = getIntent().getBooleanExtra(EXTRA_SKIP_SPLASH, false) ? 300 : 2200;
         if (!isGame) createSplash();
+        // 只有本站域名才注入 HSApp 桥；游戏/第三方页面不注入
+        syncBridgeFor(startUrl);
         webView.loadUrl(startUrl);
         if (isGame) setGameActive(true);
         if (!isGame) UpdateActivity.check(this);
@@ -358,6 +374,45 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    /** 本站可信域名：只在这些域名下才注入 HSApp 桥，避免任意页面读走已保存的账号密码。 */
+    private static java.util.Set<String> buildTrustedHosts() {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        String[] urls = {BuildConfig.INITIAL_URL, BuildConfig.WEB_BASE_URL, BuildConfig.API_BASE_URL, BuildConfig.OFFICIAL_URL};
+        for (String u : urls) {
+            try {
+                String h = Uri.parse(u).getHost();
+                if (h != null && !h.isEmpty()) out.add(h.toLowerCase());
+            } catch (Throwable ignored) {}
+        }
+        return out;
+    }
+
+    private final java.util.Set<String> trustedHosts = buildTrustedHosts();
+
+    private boolean isTrustedHost(String host) {
+        if (host == null || host.isEmpty()) return false;
+        String h = host.toLowerCase();
+        for (String t : trustedHosts) {
+            if (h.equals(t) || h.endsWith("." + t)) return true;
+        }
+        return false;
+    }
+
+    /** 按当前页面域名动态挂载/摘除 JS 桥。 */
+    private void syncBridgeFor(String url) {
+        boolean trusted = false;
+        try {
+            Uri u = Uri.parse(url);
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            trusted = ("http".equals(scheme) || "https".equals(scheme)) && isTrustedHost(u.getHost());
+        } catch (Throwable ignored) {}
+        if (trusted) {
+            webView.addJavascriptInterface(new Bridge(), "HSApp");
+        } else {
+            webView.removeJavascriptInterface("HSApp");
+        }
+    }
+
     private boolean openExternal(Uri uri, String failMessage) {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, uri);
@@ -417,6 +472,13 @@ public class MainActivity extends Activity {
                     : "未找到可处理该链接的应用";
             openExternal(uri, fail);
             return true;
+        }
+
+        @Override
+        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            super.onPageStarted(view, url, favicon);
+            // 每次跳转都按域名重新决定是否挂桥：跳到站外/游戏页立刻摘掉 HSApp
+            syncBridgeFor(url == null ? "" : url);
         }
 
         @Override

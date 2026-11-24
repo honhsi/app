@@ -175,6 +175,18 @@ public class UpdateActivity extends Activity {
             return;
         }
         if (!url.startsWith("http")) url = Api.base() + (url.startsWith("/") ? "" : "/") + url;
+        // 只允许 https（或与 API 同主机的地址），避免明文下载被替换
+        try {
+            Uri u = Uri.parse(url);
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
+            String apiHost = Uri.parse(Api.base()).getHost();
+            apiHost = apiHost == null ? "" : apiHost.toLowerCase();
+            if (!"https".equals(scheme) && !(host.equals(apiHost) && !host.isEmpty())) {
+                status.setText("更新地址不是 HTTPS，已阻止下载");
+                return;
+            }
+        } catch (Throwable ignored) {}
         try {
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
             req.setTitle("HS App 更新");
@@ -253,6 +265,13 @@ public class UpdateActivity extends Activity {
                 } catch (Throwable ignored) {}
                 return;
             }
+            // 安装前校验签名：下载到的 APK 必须与当前 App 同签名，否则拒绝（防 DNS 劫持/下载替换）
+            if (!verifyDownloadedApk()) {
+                status.setText("安装包校验失败，已阻止安装，请到官网重新下载");
+                action.setEnabled(true);
+                action.setAlpha(1f);
+                return;
+            }
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(file, "application/vnd.android.package-archive");
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -261,6 +280,42 @@ public class UpdateActivity extends Activity {
         } catch (Throwable e) {
             status.setText("安装程序打开失败，请到下载目录手动安装");
         }
+    }
+
+    /** 安装前校验：下载的 APK 必须与当前 App 同签名。 */
+    private boolean verifyDownloadedApk() {
+        try {
+            java.io.File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (dir == null) return false;
+            java.io.File apk = new java.io.File(dir, FILE_NAME);
+            if (!apk.isFile() || apk.length() < 1024L) return false;
+
+            android.content.pm.PackageManager pm = getPackageManager();
+            int flag = Build.VERSION.SDK_INT >= 28
+                    ? android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+                    : android.content.pm.PackageManager.GET_SIGNATURES;
+            android.content.pm.PackageInfo info = pm.getPackageArchiveInfo(apk.getAbsolutePath(), flag);
+            android.content.pm.PackageInfo self = pm.getPackageInfo(getPackageName(), flag);
+            byte[] a = firstSigner(info);
+            byte[] b = firstSigner(self);
+            return a != null && b != null && java.security.MessageDigest.isEqual(a, b);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private static byte[] firstSigner(android.content.pm.PackageInfo info) {
+        if (info == null) return null;
+        android.content.pm.Signature[] sigs;
+        if (Build.VERSION.SDK_INT >= 28) {
+            android.content.pm.SigningInfo si = info.signingInfo;
+            if (si == null) return null;
+            sigs = si.hasMultipleSigners() ? si.getApkContentsSigners() : si.getSigningCertificateHistory();
+        } else {
+            sigs = info.signatures;
+        }
+        if (sigs == null || sigs.length == 0) return null;
+        return sigs[0].toByteArray();
     }
 
     @Override public void onBackPressed() {
